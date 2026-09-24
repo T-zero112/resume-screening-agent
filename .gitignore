@@ -1,0 +1,27 @@
+node_modules/
+dist/
+desktop-dist/
+release/
+coverage/
+outputs/
+.env
+.env.*
+!.env.example
+
+# Local operational data can contain resumes, contact details, mail, and scores.
+data/*
+!data/slug-mappings/
+data/slug-mappings/*
+!data/slug-mappings/zh-CN.json
+
+# Real candidate exports and reports may contain personal information.
+public/viewer-data.json
+docs/hr-selected-five-scoring-standard.md
+docs/resume-parsing-quality-analysis-2026-09-20.md
+
+# Local archives and machine-specific files.
+resume-archive/
+*.log
+*.tmp
+Thumbs.db
+.DS_Store

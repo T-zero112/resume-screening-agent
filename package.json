@@ -1,0 +1,79 @@
+{
+  "name": "resume-screening-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "desktop:compile": "tsc -p tsconfig.desktop.json",
+    "desktop:dev": "npm run build && npm run desktop:compile && electron .",
+    "desktop:dist": "npm run build && npm run desktop:compile && node scripts/package-windows.mjs",
+    "export:viewer-data": "tsx src/cli/export-viewer-data.ts",
+    "generate:features": "tsx src/cli/generate-features.ts",
+    "parse": "tsx src/cli/parse-resume.ts",
+    "parse:batch": "tsx src/cli/parse-resume-batch.ts",
+    "resolve:review": "tsx src/cli/resolve-review-tasks.ts",
+    "review": "tsx src/cli/build-review.ts",
+    "score": "tsx src/cli/score-candidate.ts",
+    "score:llm": "tsx src/cli/score-resume-llm.ts",
+    "suggest:slugs": "tsx src/cli/suggest-slugs.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.1",
+    "imapflow": "^2.0.6",
+    "langsmith": "^0.10.5",
+    "lucide-react": "^1.47.0",
+    "mailparser": "^3.9.28",
+    "mammoth": "^1.12.3",
+    "nodemailer": "^10.0.10",
+    "openai": "^7.19.0",
+    "pdf-parse": "^2.4.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.2",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.4"
+  },
+  "build": {
+    "appId": "local.resumescreening.agent",
+    "productName": "简历筛选 Agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop-dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "data/slug-mappings/zh-CN.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "Resume-Screening-Agent-Setup-${version}.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

@@ -1,0 +1,400 @@
+{
+  "id": "scorecard-regional-sales-v1",
+  "schemaVersion": "scorecard.v1",
+  "jobId": "job-regional-sales",
+  "version": 1,
+  "status": "draft",
+  "title": "区域销售评分表",
+  "requirements": [
+    {
+      "id": "req-degree-associate-plus",
+      "type": "education",
+      "description": "专科及以上学历",
+      "condition": {
+        "featureKey": "education.highest_degree",
+        "operator": "includes",
+        "expectedValue": ["专科", "大专", "本科", "硕士", "博士"]
+      },
+      "isHardRequirement": true,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-driving-license",
+      "type": "credential",
+      "description": "持有驾驶证",
+      "condition": {
+        "featureKey": "credential.certificate.driving_license_c2.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "credential.certificate.driving_license_c1.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-sales",
+      "type": "skill",
+      "description": "具备销售相关经验或技能",
+      "condition": {
+        "featureKey": "skill.sales.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "skill.sales_business_development.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.sales_customer_development.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.offline_sales_development.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.regional_sales_management.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-channel-sales",
+      "type": "skill",
+      "description": "具备渠道销售或经销商管理经验",
+      "condition": {
+        "featureKey": "skill.channel_sales.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "skill.channel_and_distributor_management.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.channel_dealer_management.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.dealer_channel_distribution.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.offline_channel_promotion.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-customer-development",
+      "type": "skill",
+      "description": "具备客户开发、客户维护或业务拓展能力",
+      "condition": {
+        "featureKey": "skill.customer_development.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "skill.customer_relationship_management.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.sales_customer_development.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.offline_sales_development.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-industry-environmental",
+      "type": "domain",
+      "description": "具备环保、水处理、工程类或相关产品业务经验",
+      "condition": {
+        "featureKey": "skill.environmental_water_treatment_equipment.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-marketing-major",
+      "type": "education",
+      "description": "市场营销、国际贸易、工商管理、广告设计等相关专业",
+      "condition": {
+        "featureKey": "education.major.marketing.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "education.major.business_administration.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "education.major.international_trade_practice.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "education.major.international_economics_and_trade.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "education.major.advertising_design.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-office-summary-proposal",
+      "type": "skill",
+      "description": "具备办公软件、总结汇报、方案或提案能力",
+      "condition": {
+        "featureKey": "skill.office_software.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "skill.office_and_business_system.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.market_analysis_proposal.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.bidding_proposal_writing.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-training-or-team",
+      "type": "skill",
+      "description": "具备客户培训、团队培训或人员管理经验",
+      "condition": {
+        "featureKey": "skill.sales_team_training_management.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "skill.team_training_management.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "skill.team_management.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-sales-intent",
+      "type": "preference",
+      "description": "求职意向与销售、业务员或区域销售相关",
+      "condition": {
+        "featureKey": "preference.title.sales_representative.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "alternativeConditions": [
+        {
+          "featureKey": "preference.title.sales.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "preference.title.sales_specialist.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "preference.title.sales_manager.exists",
+          "operator": "eq",
+          "expectedValue": true
+        },
+        {
+          "featureKey": "preference.title.regional_sales.exists",
+          "operator": "eq",
+          "expectedValue": true
+        }
+      ],
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim-sales-channel",
+      "name": "销售与渠道能力",
+      "description": "销售经验、渠道销售、客户开发和老客户维护。",
+      "weight": 0.35,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-sales",
+          "requirementId": "req-sales",
+          "description": "销售相关经验或技能",
+          "maxPoints": 35
+        },
+        {
+          "id": "rule-channel-sales",
+          "requirementId": "req-channel-sales",
+          "description": "渠道销售或经销商管理经验",
+          "maxPoints": 35
+        },
+        {
+          "id": "rule-customer-development",
+          "requirementId": "req-customer-development",
+          "description": "客户开发、客户维护或业务拓展能力",
+          "maxPoints": 30
+        }
+      ]
+    },
+    {
+      "id": "dim-industry-product",
+      "name": "行业与产品匹配",
+      "description": "环保、水处理、工程类产品或相近业务场景经验。",
+      "weight": 0.2,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-industry-environmental",
+          "requirementId": "req-industry-environmental",
+          "description": "环保、水处理或工程类业务经验",
+          "maxPoints": 60
+        },
+        {
+          "id": "rule-training-or-team",
+          "requirementId": "req-training-or-team",
+          "description": "客户培训、产品培训或团队管理经验",
+          "maxPoints": 40
+        }
+      ]
+    },
+    {
+      "id": "dim-basic-qualification",
+      "name": "基础任职条件",
+      "description": "学历、驾照和相关专业背景。",
+      "weight": 0.25,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-degree",
+          "requirementId": "req-degree-associate-plus",
+          "description": "专科及以上学历",
+          "maxPoints": 45
+        },
+        {
+          "id": "rule-driving-license",
+          "requirementId": "req-driving-license",
+          "description": "驾驶证",
+          "maxPoints": 30
+        },
+        {
+          "id": "rule-marketing-major",
+          "requirementId": "req-marketing-major",
+          "description": "相关专业背景",
+          "maxPoints": 25
+        }
+      ]
+    },
+    {
+      "id": "dim-work-habits-fit",
+      "name": "工作习惯与意向匹配",
+      "description": "总结提案、办公系统、岗位意向匹配。",
+      "weight": 0.2,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-office-summary-proposal",
+          "requirementId": "req-office-summary-proposal",
+          "description": "办公软件、总结汇报、方案或提案能力",
+          "maxPoints": 50
+        },
+        {
+          "id": "rule-sales-intent",
+          "requirementId": "req-sales-intent",
+          "description": "求职意向与销售岗位匹配",
+          "maxPoints": 50
+        }
+      ]
+    }
+  ],
+  "reviewFlagRules": [
+    {
+      "id": "flag-restricted-demographics",
+      "description": "JD 中性别、年龄相关表述不进入自动评分，也不作为自动筛选条件。"
+    },
+    {
+      "id": "flag-own-car",
+      "description": "自带车目前缺少稳定结构化字段，需人工确认。"
+    },
+    {
+      "id": "flag-travel",
+      "description": "跨市、跨省出差适应性与实际基本不出差存在表述差异，需人工确认实际岗位要求。"
+    },
+    {
+      "id": "flag-soft-skills",
+      "description": "性格开朗、沟通能力、学习能力等软性条件需结合面试或人工复核。"
+    }
+  ],
+  "createdBy": "codex",
+  "createdAt": "2026-09-21T00:00:00.000Z",
+  "updatedAt": "2026-09-21T00:00:00.000Z"
+}

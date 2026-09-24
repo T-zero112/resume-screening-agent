@@ -1,0 +1,287 @@
+{
+  "id": "scorecard-ai-agent-intern-v1",
+  "schemaVersion": "scorecard.v1",
+  "jobId": "job-ai-agent-intern",
+  "version": 1,
+  "status": "draft",
+  "title": "AI Agent 开发实习生评分表",
+  "requirements": [
+    {
+      "id": "req-degree-bachelor-plus",
+      "type": "education",
+      "description": "本科及以上学历在校生",
+      "condition": {
+        "featureKey": "education.highest_degree",
+        "operator": "includes",
+        "expectedValue": ["本科", "硕士", "博士"]
+      },
+      "isHardRequirement": true,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-internship-intent",
+      "type": "preference",
+      "description": "求职意向或工作类型与实习岗位匹配",
+      "condition": {
+        "featureKey": "preference.employment_type.internship.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": true,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-typescript",
+      "type": "skill",
+      "description": "具备 TypeScript 开发经验",
+      "condition": {
+        "featureKey": "skill.typescript.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-python",
+      "type": "skill",
+      "description": "具备 Python 开发经验",
+      "condition": {
+        "featureKey": "skill.python.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-ai-ml",
+      "type": "domain",
+      "description": "了解 AI、机器学习、深度学习或 NLP 相关技术",
+      "condition": {
+        "featureKey": "skill.pytorch.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-openai-api",
+      "type": "skill",
+      "description": "具备 LLM 应用开发或 OpenAI API 调用经验",
+      "condition": {
+        "featureKey": "skill.openai_api.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-agent-project",
+      "type": "project",
+      "description": "有 AI Agent 或智能交互相关项目经验",
+      "condition": {
+        "featureKey": "preference.title.agent.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-git",
+      "type": "skill",
+      "description": "熟悉 Git 等版本管理工具",
+      "condition": {
+        "featureKey": "skill.git.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-react",
+      "type": "skill",
+      "description": "具备 React 前端开发能力",
+      "condition": {
+        "featureKey": "skill.react.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-vue",
+      "type": "skill",
+      "description": "具备 Vue 前端开发能力",
+      "condition": {
+        "featureKey": "skill.vue.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-dify",
+      "type": "skill",
+      "description": "有 Dify 平台使用经验",
+      "condition": {
+        "featureKey": "skill.dify.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    },
+    {
+      "id": "req-related-major",
+      "type": "education",
+      "description": "计算机、人工智能、软件工程等相关专业背景",
+      "condition": {
+        "featureKey": "education.major.computer_science.exists",
+        "operator": "eq",
+        "expectedValue": true
+      },
+      "isHardRequirement": false,
+      "evidenceRequired": true,
+      "allowHumanReview": true
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dim-core-development",
+      "name": "核心开发能力",
+      "description": "TypeScript、Python 与基本工程开发能力。",
+      "weight": 0.35,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-typescript",
+          "requirementId": "req-typescript",
+          "description": "TypeScript 开发经验匹配度",
+          "maxPoints": 35
+        },
+        {
+          "id": "rule-python",
+          "requirementId": "req-python",
+          "description": "Python 开发经验匹配度",
+          "maxPoints": 35
+        },
+        {
+          "id": "rule-git",
+          "requirementId": "req-git",
+          "description": "Git 与代码协作基础",
+          "maxPoints": 30
+        }
+      ]
+    },
+    {
+      "id": "dim-ai-agent",
+      "name": "AI 与 Agent 相关经验",
+      "description": "AI/ML、LLM API、Agent 或智能交互项目经验。",
+      "weight": 0.35,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-ai-ml",
+          "requirementId": "req-ai-ml",
+          "description": "AI、机器学习、深度学习或 NLP 技术基础",
+          "maxPoints": 30
+        },
+        {
+          "id": "rule-openai-api",
+          "requirementId": "req-openai-api",
+          "description": "LLM 应用开发或 OpenAI API 调用经验",
+          "maxPoints": 35
+        },
+        {
+          "id": "rule-agent-project",
+          "requirementId": "req-agent-project",
+          "description": "AI Agent 或智能交互相关项目经验",
+          "maxPoints": 35
+        }
+      ]
+    },
+    {
+      "id": "dim-frontend-platform",
+      "name": "前端与平台经验",
+      "description": "React、Vue、Dify 等前端或平台能力。",
+      "weight": 0.15,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-react",
+          "requirementId": "req-react",
+          "description": "React 前端开发经验",
+          "maxPoints": 50
+        },
+        {
+          "id": "rule-vue",
+          "requirementId": "req-vue",
+          "description": "Vue 前端开发经验",
+          "maxPoints": 25
+        },
+        {
+          "id": "rule-dify",
+          "requirementId": "req-dify",
+          "description": "Dify 平台使用经验",
+          "maxPoints": 25
+        }
+      ]
+    },
+    {
+      "id": "dim-education-fit",
+      "name": "教育背景匹配",
+      "description": "学历与相关专业匹配程度。",
+      "weight": 0.15,
+      "maxScore": 100,
+      "scoringRules": [
+        {
+          "id": "rule-degree",
+          "requirementId": "req-degree-bachelor-plus",
+          "description": "本科及以上学历匹配",
+          "maxPoints": 60
+        },
+        {
+          "id": "rule-related-major",
+          "requirementId": "req-related-major",
+          "description": "计算机、人工智能、软件工程等相关专业匹配",
+          "maxPoints": 40
+        }
+      ]
+    }
+  ],
+  "reviewFlagRules": [
+    {
+      "id": "flag-related-major-missing",
+      "description": "未发现计算机、人工智能、软件工程等相关专业证据时，需要人工判断候选人的项目经验是否可替代专业背景。"
+    },
+    {
+      "id": "flag-dify-missing",
+      "description": "未发现 Dify 平台使用经验，不自动扣分，但在平台经验维度中体现。"
+    },
+    {
+      "id": "flag-soft-skills",
+      "description": "逻辑思维、学习能力、团队协作精神较难从简历结构化字段直接判断，需要面试或人工复核。"
+    }
+  ],
+  "createdBy": "codex",
+  "createdAt": "2026-09-20T00:00:00.000Z",
+  "updatedAt": "2026-09-20T00:00:00.000Z"
+}

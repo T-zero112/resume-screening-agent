@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "outDir": "desktop-dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["tests", "node_modules", "dist", "desktop-dist"]
+}
