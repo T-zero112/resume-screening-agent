@@ -70,7 +70,12 @@ async function createWindow() {
       sandbox: true,
     },
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      if (["http:", "https:"].includes(new URL(url).protocol)) void shell.openExternal(url);
+    } catch {}
+    return { action: "deny" };
+  });
   window.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith(localOrigin)) event.preventDefault();
   });

@@ -8,12 +8,14 @@ import { archiveJob, confirmDraft, createJobDraft, createStandardRevision, getCo
 import { generateScoreStandard } from "./score-standard-generator.js";
 import { createScoreProcess, getScoreProcess, listScoreProcesses, queueFailedScoreFilesRetry, queueScoreProcessResume, requestScoreProcessPause, runScoreProcess } from "./score-process.js";
 import { getLlmUsageStats, getUsdCnyRate } from "../observability/llm-usage.js";
-import { assignInboxItem, listEmailInbox, pollMailbox, restartEmailPolling, startEmailPolling, testQqMailbox } from "../mail/email-inbox.js";
+import { assignInboxItem, listEmailInbox, pollMailbox, restartEmailPolling, startEmailPolling, testMailConnection } from "../mail/email-inbox.js";
+import { readMailConnectionSettings } from "../mail/mail-config.js";
 import { getResumeArchiveSettings, saveResumeArchiveSettings, selectWindowsArchiveDirectory, startArchiveRetention } from "../mail/resume-archive.js";
 import { readCandidateStages, updateCandidateStage, type CandidateStage } from "./candidate-workflow.js";
 import { confirmInterviewDraftNotSent, getInterviewEmailTemplate, listInterviewDrafts, saveInterviewDrafts, saveInterviewEmailTemplate, sendInterviewDrafts } from "./interview-drafts.js";
 import { generateDimensionGuidance } from "./dimension-guidance-generator.js";
 import { ensureResumePhoto } from "../parsing/resume-photo.js";
+import { fetchAvailableModels } from "./model-discovery.js";
 
 const GenerateRequestSchema = z.object({ title: z.string().trim().min(1), jdText: z.string().trim().min(1) });
 const StandardRequestSchema = z.object({ jobId: z.string().min(1), standard: z.unknown() });
@@ -30,7 +32,23 @@ const LlmSettingsSchema = z.object({
   langSmithProject: z.string().trim().min(1).max(200),
   langSmithApiKey: z.string().max(2000).optional().default(""),
 });
-const QqMailSettingsSchema = z.object({ address: z.string().trim().email(), authCode: z.string().trim().max(500).optional().default(""), enabled: z.boolean() });
+const ModelDiscoverySchema = z.object({
+  provider: z.enum(["openai", "deepseek", "custom"]),
+  baseURL: z.string().trim().max(1000).optional().default(""),
+  apiKey: z.string().max(2000).optional().default(""),
+});
+const MailSettingsSchema = z.object({
+  provider: z.enum(["qq", "custom"]),
+  address: z.string().trim().email(),
+  authCode: z.string().trim().max(500).optional().default(""),
+  enabled: z.boolean(),
+  imapHost: z.string().trim().min(1).max(253).regex(/^[a-zA-Z0-9.-]+$/),
+  imapPort: z.number().int().min(1).max(65535),
+  imapSecure: z.boolean(),
+  smtpHost: z.string().trim().min(1).max(253).regex(/^[a-zA-Z0-9.-]+$/),
+  smtpPort: z.number().int().min(1).max(65535),
+  smtpSecure: z.boolean(),
+});
 const ResumeArchiveSettingsSchema = z.object({ enabled: z.boolean(), directory: z.string().max(2000), retentionDays: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365), z.null()]) });
 const CandidateStageSchema = z.object({ jobId: z.string().min(1), candidateId: z.string().min(1).max(200), stage: z.enum(["interview", "pending", "rejected"]).nullable() });
 const InterviewDraftsSchema = z.object({
@@ -57,7 +75,7 @@ const InterviewEmailTemplateSchema = z.object({
   }),
 });
 const DimensionGuidanceRequestSchema = z.object({ jobId: z.string().min(1), dimensionName: z.string().trim().min(1).max(200) });
-const RevealKeySchema = z.object({ kind: z.enum(["llm", "langsmith", "qq-mail"]) });
+const RevealKeySchema = z.object({ kind: z.enum(["llm", "langsmith", "qq-mail", "mail"]) });
 const supportedExtensions = new Set([".pdf", ".docx", ".txt"]);
 
 export function jobApiPlugin(): Plugin {
@@ -89,6 +107,7 @@ export function createJobApiMiddleware(options: { storeSecrets?: (secrets: Recor
 
           if (request.method === "GET" && request.url === "/api/settings") {
             const provider = resolveConfiguredProvider();
+            const mail = readMailConnectionSettings();
             return sendJson(response, 200, {
               provider,
               model: process.env.LLM_MODEL ?? (provider === "deepseek" ? process.env.DEEPSEEK_MODEL : process.env.OPENAI_MODEL) ?? (provider === "deepseek" ? "deepseek-flash" : "gpt-6-astra"),
@@ -98,10 +117,22 @@ export function createJobApiMiddleware(options: { storeSecrets?: (secrets: Recor
               langSmithEndpoint: process.env.LANGSMITH_ENDPOINT ?? "https://api.smith.langchain.com",
               langSmithProject: process.env.LANGSMITH_PROJECT ?? "resume-screening",
               hasLangSmithApiKey: Boolean(process.env.LANGSMITH_API_KEY),
-              qqMailAddress: process.env.QQ_MAIL_ADDRESS ?? "",
-              hasQqMailAuthCode: Boolean(process.env.QQ_MAIL_AUTH_CODE),
-              qqMailEnabled: process.env.QQ_MAIL_ENABLED?.toLowerCase() === "true",
+              mailProvider: mail.provider,
+              mailAddress: mail.address,
+              hasMailAuthCode: Boolean(mail.authCode),
+              mailEnabled: mail.enabled,
+              mailImapHost: mail.imapHost,
+              mailImapPort: mail.imapPort,
+              mailImapSecure: mail.imapSecure,
+              mailSmtpHost: mail.smtpHost,
+              mailSmtpPort: mail.smtpPort,
+              mailSmtpSecure: mail.smtpSecure,
             });
+          }
+
+          if (request.method === "POST" && request.url === "/api/settings/models") {
+            const settings = ModelDiscoverySchema.parse(await readJsonBody(request));
+            return sendJson(response, 200, { models: await fetchAvailableModels(settings) });
           }
 
           if (request.method === "GET" && request.url === "/api/archive/settings") {
@@ -123,8 +154,8 @@ export function createJobApiMiddleware(options: { storeSecrets?: (secrets: Recor
             const { kind } = RevealKeySchema.parse(await readJsonBody(request));
             const key = kind === "langsmith"
               ? process.env.LANGSMITH_API_KEY ?? ""
-              : kind === "qq-mail"
-                ? process.env.QQ_MAIL_AUTH_CODE ?? ""
+              : kind === "qq-mail" || kind === "mail"
+                ? process.env.MAIL_AUTH_CODE ?? process.env.QQ_MAIL_AUTH_CODE ?? ""
                 : process.env.LLM_API_KEY ?? (resolveConfiguredProvider() === "deepseek" ? process.env.DEEPSEEK_API_KEY : undefined) ?? process.env.OPENAI_API_KEY ?? "";
             if (!key) throw new Error("该 API Key 尚未配置。");
             return sendJson(response, 200, { key });
@@ -160,25 +191,38 @@ export function createJobApiMiddleware(options: { storeSecrets?: (secrets: Recor
             return sendJson(response, 200, { saved: true, hasApiKey: Boolean(process.env.LLM_API_KEY), hasLangSmithApiKey: Boolean(process.env.LANGSMITH_API_KEY) });
           }
 
-          if (request.method === "PUT" && request.url === "/api/settings/qq-mail") {
-            const settings = QqMailSettingsSchema.parse(await readJsonBody(request));
-            const authCode = settings.authCode || process.env.QQ_MAIL_AUTH_CODE || "";
-            if (!authCode) throw new Error("请输入 QQ 邮箱客户端授权码。");
-            await testQqMailbox(settings.address, authCode);
-            const values = {
-              QQ_MAIL_ADDRESS: settings.address,
-              QQ_MAIL_ENABLED: String(settings.enabled),
+          if (request.method === "PUT" && request.url === "/api/settings/mail") {
+            const settings = MailSettingsSchema.parse(await readJsonBody(request));
+            const authCode = settings.authCode || readMailConnectionSettings().authCode;
+            if (!authCode) throw new Error("请输入邮箱客户端授权码或应用专用密码。");
+            const validated = { ...settings, authCode };
+            await testMailConnection(validated);
+            const values: Record<string, string> = {
+              MAIL_PROVIDER: settings.provider,
+              MAIL_ADDRESS: settings.address,
+              MAIL_ENABLED: String(settings.enabled),
+              MAIL_IMAP_HOST: settings.imapHost,
+              MAIL_IMAP_PORT: String(settings.imapPort),
+              MAIL_IMAP_SECURE: String(settings.imapSecure),
+              MAIL_SMTP_HOST: settings.smtpHost,
+              MAIL_SMTP_PORT: String(settings.smtpPort),
+              MAIL_SMTP_SECURE: String(settings.smtpSecure),
             };
-            const secrets = { ...values, QQ_MAIL_AUTH_CODE: authCode };
+            const secrets = { MAIL_AUTH_CODE: authCode };
+            await updateEnvFile(values);
             if (options.storeSecrets) await options.storeSecrets(secrets);
             else await updateEnvFile(secrets);
-            Object.assign(process.env, secrets);
+            Object.assign(process.env, values, secrets);
             restartEmailPolling();
-            return sendJson(response, 200, { saved: true, address: settings.address, hasAuthCode: true, enabled: settings.enabled });
+            return sendJson(response, 200, { saved: true, address: settings.address, hasAuthCode: true, enabled: settings.enabled, provider: settings.provider });
           }
 
           if (request.method === "GET" && request.url === "/api/email/inbox") {
             return sendJson(response, 200, await listEmailInbox());
+          }
+
+          if (request.method === "GET" && request.url === "/api/dashboard") {
+            return sendJson(response, 200, await buildDashboardSummary());
           }
 
           if (request.method === "POST" && request.url === "/api/email/poll") {
@@ -447,6 +491,94 @@ async function listJobCandidates(jobId: string): Promise<Array<Record<string, un
     ...candidate,
     hrStage: typeof candidate.id === "string" ? stages[candidate.id] : undefined,
   }));
+}
+
+async function buildDashboardSummary() {
+  const [jobs, inbox] = await Promise.all([listJobs(), listEmailInbox()]);
+  const summaries = await Promise.all(jobs.map(async ({ job, standard }) => {
+    const [candidates, processes] = await Promise.all([listJobCandidates(job.id), listScoreProcesses(job.id)]);
+    const latestProcess = processes[0];
+    const drafts = await listInterviewDrafts(job.id, candidates);
+    const needsHrReviewCount = candidates.filter((candidate) => !candidate.hrStage).length;
+    const latestFiles = latestProcess?.files ?? [];
+    const completedFiles = latestFiles.filter((file) => file.status === "completed").length;
+    const failedFiles = latestFiles.filter((file) => file.status === "failed").length;
+    const sentDrafts = drafts.filter((draft) => draft.sentAt);
+    const savedDrafts = drafts.filter((draft) => draft.updatedAt && !draft.sentAt);
+    const latestSent = sentDrafts.sort((left, right) => right.sentAt!.localeCompare(left.sentAt!))[0];
+    const latestSaved = savedDrafts.sort((left, right) => right.updatedAt!.localeCompare(left.updatedAt!))[0];
+    const draftActivities = [
+      ...(latestSent ? [{
+        id: `draft-sent-${job.id}`,
+        kind: "email" as const,
+        title: "面试邀请已发送",
+        detail: `${job.title} · ${sentDrafts.length} 位候选人`,
+        timestamp: latestSent.sentAt!,
+        jobId: job.id,
+      }] : []),
+      ...(latestSaved ? [{
+        id: `draft-saved-${job.id}`,
+        kind: "email" as const,
+        title: "面试邮件草稿已保存",
+        detail: `${job.title} · ${savedDrafts.length} 份草稿`,
+        timestamp: latestSaved.updatedAt!,
+        jobId: job.id,
+      }] : []),
+    ];
+    return {
+      job: { id: job.id, title: job.title, status: job.status },
+      standardVersion: standard.version,
+      candidateCount: candidates.length,
+      interviewCount: candidates.filter((candidate) => candidate.hrStage === "interview").length,
+      pendingCount: candidates.filter((candidate) => candidate.hrStage === "pending").length,
+      rejectedCount: candidates.filter((candidate) => candidate.hrStage === "rejected").length,
+      reviewCount: needsHrReviewCount,
+      parseReviewCount: candidates.filter((candidate) => candidate.parseStatus === "needs_review").length + failedFiles,
+      emailTodoCount: drafts.filter((draft) => draft.sendStatus !== "sent" && draft.sendStatus !== "sending" && draft.sendStatus !== "unknown").length,
+      draftActivities,
+      latestBatch: latestProcess ? {
+        status: latestProcess.status,
+        total: latestFiles.length,
+        completed: completedFiles,
+        failed: failedFiles,
+        updatedAt: latestProcess.updatedAt ?? latestProcess.createdAt,
+      } : null,
+    };
+  }));
+
+  const activities = [
+    ...inbox.map((item) => ({
+      id: `mail-${item.id}`,
+      kind: "mail" as const,
+      title: item.status === "needs_assignment" ? "收到待分配邮件" : item.status === "needs_download" ? "收到疑似云附件邮件" : item.status === "failed" ? "邮件处理失败" : item.status === "ignored" ? "邮件未发现可用简历附件" : "收到简历邮件",
+      detail: `${item.jobTitle ?? "尚未分配岗位"} · ${item.attachmentNames.length} 份附件`,
+      timestamp: item.receivedAt,
+    })),
+    ...summaries.flatMap((summary) => summary.latestBatch ? [{
+      id: `score-${summary.job.id}`,
+      kind: "score" as const,
+      title: scoreActivityTitle(summary.latestBatch.status),
+      detail: `${summary.job.title} · ${summary.latestBatch.completed}/${summary.latestBatch.total} 份完成${summary.latestBatch.failed ? ` · ${summary.latestBatch.failed} 份失败` : ""}`,
+      timestamp: summary.latestBatch.updatedAt,
+      jobId: summary.job.id,
+    }] : []),
+    ...summaries.flatMap((summary) => summary.draftActivities),
+  ].sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, 8);
+
+  return {
+    todos: {
+      review: summaries.reduce((total, job) => total + job.reviewCount, 0),
+      parseReview: summaries.reduce((total, job) => total + job.parseReviewCount, 0),
+      pending: summaries.reduce((total, job) => total + job.pendingCount, 0),
+      email: summaries.reduce((total, job) => total + job.emailTodoCount, 0),
+    },
+    jobs: summaries,
+    activities,
+  };
+}
+
+function scoreActivityTitle(status: string): string {
+  return ({ queued: "评分等待开始", processing: "评分进行中", paused: "评分已暂停", completed: "评分批次完成", partial_failed: "评分批次部分失败", failed: "评分批次失败" })[status] ?? "评分批次更新";
 }
 
 async function readScoredCandidate(directory: string, jobId: string, documentName?: string): Promise<Record<string, unknown> | null> {

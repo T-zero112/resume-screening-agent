@@ -1,9 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { createTransport } from "nodemailer";
-
 import { findSenderEmailForAttachment } from "../mail/email-inbox.js";
+import { createSmtpTransport, readMailConnectionSettings } from "../mail/mail-config.js";
 
 export type InterviewDraft = {
   candidateId: string;
@@ -131,17 +130,12 @@ export async function sendInterviewDrafts(
   sendMessage?: (message: { to: string; subject: string; text: string }) => Promise<void>,
 ): Promise<InterviewSendResult[]> {
   assertSafeJobId(jobId);
-  const address = process.env.QQ_MAIL_ADDRESS?.trim();
-  const authCode = process.env.QQ_MAIL_AUTH_CODE?.trim();
-  if (!address || !authCode) throw new Error("请先在设置中配置 QQ 邮箱地址和客户端授权码，再发送面试邮件。");
+  const mailSettings = readMailConnectionSettings();
+  const address = mailSettings.address.trim();
+  if (!address || !mailSettings.authCode.trim() || !mailSettings.smtpHost) throw new Error("请先在设置中配置发件邮箱、SMTP 服务器和客户端授权码，再发送面试邮件。");
 
   return withDraftLock(jobId, async () => {
-    const transport = sendMessage ? undefined : createTransport({
-      host: "smtp.qq.com",
-      port: 465,
-      secure: true,
-      auth: { user: address, pass: authCode },
-    });
+    const transport = sendMessage ? undefined : createSmtpTransport(mailSettings);
     const send = sendMessage ?? (async (message: { to: string; subject: string; text: string }) => {
       await transport!.sendMail({ from: address, ...message });
     });

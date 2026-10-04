@@ -1,14 +1,14 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 
 import { getConfirmedJobStandard, listJobs } from "../jobs/job-store.js";
 import { createScoreProcess, getScoreProcess, runScoreProcess } from "../jobs/score-process.js";
+import { createImapClient, createSmtpTransport, readMailConnectionSettings, type MailConnectionSettings } from "./mail-config.js";
 
 const inboxFile = path.resolve("data/mail/inbox.json");
-const cursorFile = path.resolve("data/mail/cursor.json");
+const legacyCursorFile = path.resolve("data/mail/cursor.json");
 const attachmentDirectory = path.resolve("data/mail/attachments");
 const supportedAttachment = /\.(pdf|docx|txt)$/i;
 const maxAttachmentBytes = 20 * 1024 * 1024;
@@ -24,14 +24,15 @@ export type EmailInboxItem = {
   receivedAt: string;
   jobId?: string;
   jobTitle?: string;
-  status: "needs_assignment" | "queued" | "processing" | "completed" | "failed" | "ignored";
+  status: "needs_assignment" | "needs_download" | "queued" | "processing" | "completed" | "failed" | "ignored";
   attachmentNames: string[];
   storedAttachments: string[];
+  cloudLinks?: string[];
   scoreProcessId?: string;
   error?: string;
 };
 
-export type EmailPollResult = { received: number; queued: number; needsAssignment: number; errors: string[] };
+export type EmailPollResult = { received: number; queued: number; needsAssignment: number; needsDownload: number; errors: string[] };
 
 export function startEmailPolling(): () => void {
   ensureEmailPolling();
@@ -42,11 +43,12 @@ export function startEmailPolling(): () => void {
 }
 
 export function ensureEmailPolling(): void {
-  if (pollingTimer || process.env.QQ_MAIL_ENABLED?.toLowerCase() !== "true" || !process.env.QQ_MAIL_ADDRESS || !process.env.QQ_MAIL_AUTH_CODE) return;
-  const interval = Math.max(60, Number.parseInt(process.env.QQ_MAIL_POLL_SECONDS ?? "120", 10) || 120);
-  void pollMailbox().catch((error: unknown) => console.error("QQ 邮箱自动收取失败：", error));
+  const settings = readMailConnectionSettings();
+  if (pollingTimer || !settings.enabled || !settings.address || !settings.authCode || !settings.imapHost) return;
+  const interval = Math.max(60, Number.parseInt(process.env.MAIL_POLL_SECONDS ?? process.env.QQ_MAIL_POLL_SECONDS ?? "120", 10) || 120);
+  void pollMailbox().catch((error: unknown) => console.error("邮箱自动收取失败：", error));
   pollingTimer = setInterval(() => {
-    void pollMailbox().catch((error: unknown) => console.error("QQ 邮箱自动收取失败：", error));
+    void pollMailbox().catch((error: unknown) => console.error("邮箱自动收取失败：", error));
   }, interval * 1000);
   pollingTimer.unref();
 }
@@ -57,22 +59,27 @@ export function restartEmailPolling(): void {
   ensureEmailPolling();
 }
 
-export async function testQqMailbox(address: string, authCode: string): Promise<void> {
-  const client = createClient(address, authCode);
+export async function testMailConnection(settings: MailConnectionSettings): Promise<void> {
+  const client = createImapClient(settings);
   try {
     await client.connect();
     await client.mailboxOpen("INBOX", { readOnly: true });
   } finally {
     await client.logout().catch(() => undefined);
   }
+  const transport = createSmtpTransport(settings);
+  try {
+    await transport.verify();
+  } finally {
+    transport.close();
+  }
 }
 
 export async function pollMailbox(): Promise<EmailPollResult> {
   if (pollInFlight) return pollInFlight;
-  const address = process.env.QQ_MAIL_ADDRESS?.trim();
-  const authCode = process.env.QQ_MAIL_AUTH_CODE;
-  if (!address || !authCode) throw new Error("请先在设置中配置 QQ 邮箱地址和客户端授权码。");
-  pollInFlight = pollMailboxInternal(address, authCode).finally(() => { pollInFlight = undefined; });
+  const settings = readMailConnectionSettings();
+  if (!settings.address || !settings.authCode || !settings.imapHost || !settings.smtpHost) throw new Error("请先在设置中配置邮箱连接信息和客户端授权码。");
+  pollInFlight = pollMailboxInternal(settings).finally(() => { pollInFlight = undefined; });
   return pollInFlight;
 }
 
@@ -105,22 +112,22 @@ export async function assignInboxItem(itemId: string, jobId: string): Promise<Em
   return updated;
 }
 
-async function pollMailboxInternal(address: string, authCode: string): Promise<EmailPollResult> {
-  const result: EmailPollResult = { received: 0, queued: 0, needsAssignment: 0, errors: [] };
-  const client = createClient(address, authCode);
+async function pollMailboxInternal(settings: MailConnectionSettings): Promise<EmailPollResult> {
+  const result: EmailPollResult = { received: 0, queued: 0, needsAssignment: 0, needsDownload: 0, errors: [] };
+  const client = createImapClient(settings);
   const items = await readInbox();
   const knownKeys = new Set(items.map((item) => item.messageKey));
-  const cursor = await readCursor();
+  const cursor = await readCursor(settings);
   try {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
       const mailbox = client.mailbox;
-      if (!mailbox) throw new Error("QQ 邮箱收件箱无法打开。");
+      if (!mailbox) throw new Error("邮箱收件箱无法打开。");
       const uidValidity = String(mailbox.uidValidity ?? "0");
       if (!cursor.uidValidity || cursor.uidValidity !== uidValidity) {
         const latestUid = Math.max(0, Number(mailbox.uidNext ?? 1) - 1);
-        await saveLastUid(uidValidity, latestUid);
+        await saveLastUid(settings, uidValidity, latestUid);
         return result;
       }
       const lastUid = cursor.uidValidity === uidValidity ? cursor.lastUid : 0;
@@ -128,9 +135,9 @@ async function pollMailboxInternal(address: string, authCode: string): Promise<E
       for await (const message of client.fetch(range, { uid: true, source: true, internalDate: true }, { uid: true })) {
         const uidKey = `${String(mailbox.uidValidity ?? "0")}:${message.uid}`;
         const parsed = await simpleParser(message.source ?? Buffer.alloc(0));
-        const messageKey = parsed.messageId ? `message:${parsed.messageId}` : `qq:${address.toLowerCase()}:${uidKey}`;
+        const messageKey = parsed.messageId ? `message:${parsed.messageId}` : `${settings.imapHost}:${settings.address.toLowerCase()}:${uidKey}`;
         if (knownKeys.has(messageKey)) {
-          await saveLastUid(uidValidity, message.uid);
+          await saveLastUid(settings, uidValidity, message.uid);
           continue;
         }
         const names: string[] = [];
@@ -154,16 +161,17 @@ async function pollMailboxInternal(address: string, authCode: string): Promise<E
           stored.push(storedName);
         }
         const subject = parsed.subject?.trim() ?? "（无主题）";
+        const cloudLinks = findCloudAttachmentLinks([parsed.text ?? "", typeof parsed.html === "string" ? parsed.html : ""].join("\n"));
         const matches = matchJobsBySubject(subject, await listJobs());
         const item: EmailInboxItem = {
           id: randomUUID(), messageKey, messageId: parsed.messageId,
           subject, from: parsed.from?.text ?? "未知发件人",
           receivedAt: normalizeDate(parsed.date ?? message.internalDate),
-            status: stored.length === 0 ? "ignored" : matches.length === 1 ? "queued" : "needs_assignment",
+          status: stored.length === 0 ? cloudLinks.length ? "needs_download" : "ignored" : matches.length === 1 ? "queued" : "needs_assignment",
           jobId: matches.length === 1 ? matches[0]!.job.id : undefined,
           jobTitle: matches.length === 1 ? matches[0]!.job.title : undefined,
-          attachmentNames: names, storedAttachments: stored,
-          error: stored.length === 0 ? describeUnsupportedAttachments(parsed.attachments.length, unsupportedNames, oversizedNames) : undefined,
+          attachmentNames: names, storedAttachments: stored, cloudLinks: cloudLinks.length ? cloudLinks : undefined,
+          error: stored.length === 0 ? cloudLinks.length ? "邮件正文包含疑似云附件/网盘链接。当前版本不会自动登录或下载，请核验链接并手动下载后上传简历。" : describeUnsupportedAttachments(parsed.attachments.length, unsupportedNames, oversizedNames) : undefined,
         };
         items.unshift(item);
         knownKeys.add(messageKey);
@@ -179,7 +187,7 @@ async function pollMailboxInternal(address: string, authCode: string): Promise<E
             result.errors.push(`${subject}: ${item.error}`);
           }
         } else if (item.status === "needs_assignment") result.needsAssignment += 1;
-        await saveLastUid(uidValidity, message.uid);
+        await saveLastUid(settings, uidValidity, message.uid);
         await writeInbox(items);
       }
     } finally {
@@ -234,25 +242,41 @@ function matchJobsBySubject(subject: string, jobs: Awaited<ReturnType<typeof lis
   return jobs.filter(({ job, standard }) => !job.archivedAt && job.status === "confirmed" && standard.status === "confirmed" && normalized.includes(job.title.toLocaleLowerCase()));
 }
 
-function createClient(address: string, authCode: string) {
-  return new ImapFlow({
-    host: "imap.qq.com", port: 993, secure: true,
-    auth: { user: address.trim(), pass: authCode.trim() },
-    logger: false,
-  });
+export function findCloudAttachmentLinks(body: string): string[] {
+  const urls = [...body.matchAll(/https?:\/\/[^\s<>"'()[\]]+/gi)]
+    .map((match) => match[0]!.replace(/&amp;/gi, "&").replace(/[.,;!?，。；！？）】]+$/u, ""))
+    .filter((value) => {
+      try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+    });
+  const hasAttachmentLanguage = /云附件|超大附件|附件下载|网盘|云盘|提取码|下载链接|cloud\s*attachment|download\s+(?:the\s+)?attachment/i.test(body);
+  const hasKnownCloudHost = urls.some((value) => /(?:pan\.baidu\.com|aliyundrive\.com|alipan\.com|123pan\.com|cloud\.189\.cn|drive\.google\.com|1drv\.ms|sharepoint\.com|wetransfer\.com|mail\.163\.com)/i.test(value));
+  return hasAttachmentLanguage || hasKnownCloudHost ? [...new Set(urls)] : [];
 }
 
-async function saveLastUid(uidValidity: string, uid: number): Promise<void> {
+async function saveLastUid(settings: MailConnectionSettings, uidValidity: string, uid: number): Promise<void> {
   const value = { uidValidity, lastUid: uid };
-  await mkdir(path.dirname(inboxFile), { recursive: true });
-  await writeFile(cursorFile, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const file = cursorFileFor(settings);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-async function readCursor(): Promise<{ uidValidity?: string; lastUid: number }> {
-  return readFile(cursorFile, "utf8").then((text) => JSON.parse(text) as { uidValidity?: string; lastUid: number }).catch((error: NodeJS.ErrnoException) => {
+async function readCursor(settings: MailConnectionSettings): Promise<{ uidValidity?: string; lastUid: number }> {
+  const file = cursorFileFor(settings);
+  return readFile(file, "utf8").then((text) => JSON.parse(text) as { uidValidity?: string; lastUid: number }).catch(async (error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT" && settings.provider === "qq") {
+      return readFile(legacyCursorFile, "utf8").then((text) => JSON.parse(text) as { uidValidity?: string; lastUid: number }).catch((legacyError: NodeJS.ErrnoException) => {
+        if (legacyError.code === "ENOENT") return { lastUid: 0 };
+        throw legacyError;
+      });
+    }
     if (error.code === "ENOENT") return { lastUid: 0 };
     throw error;
   });
+}
+
+function cursorFileFor(settings: MailConnectionSettings): string {
+  const accountKey = createHash("sha256").update(`${settings.imapHost.toLowerCase()}\0${settings.address.toLowerCase()}`).digest("hex").slice(0, 20);
+  return path.resolve(`data/mail/cursor-${accountKey}.json`);
 }
 
 function normalizeDate(value?: Date | string): string {

@@ -8,7 +8,7 @@
 - 支持 PDF、DOCX、TXT 简历解析、批量上传、质量提示和失败重试。
 - 按已确认的岗位评分标准生成候选人分数、优势、风险和原文证据。
 - 管理候选人状态，批量处理面试、待定和淘汰；为面试候选人编辑独立邮件草稿。
-- 可选连接 QQ 邮箱，通过 IMAP 接收简历附件并按邮件主题匹配岗位。
+- 可选连接 QQ 邮箱预设或其他支持标准 IMAP/SMTP 登录的邮箱，通过 IMAP 接收简历附件并按邮件主题匹配岗位；疑似云附件邮件会标为待下载并展示链接，不会自动登录或下载第三方云盘内容。
 - 可选 LangSmith 追踪 LLM 调用元数据；默认关闭。
 - 提供 Windows 桌面安装包，数据保存在当前 Windows 用户本机，不在 HR 用户之间同步。
 
@@ -88,7 +88,7 @@ LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 LANGSMITH_PROJECT=resume-screening
 ```
 
-可选 QQ 邮箱 IMAP 收件配置见 `.env.example`；桌面版可在软件设置中配置邮箱和授权码。
+邮箱可在桌面版设置中配置 QQ 预设或自定义 IMAP/SMTP 服务器及客户端授权码。仅支持邮件服务商允许使用 IMAP/SMTP 凭据登录的账户；OAuth-only 账户暂不支持。旧版 `QQ_MAIL_*` 环境变量仍兼容。
 
 ## 数据与隐私
 
